@@ -11,7 +11,7 @@
 <!-- PWA -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="ClapRun">
 <meta name="application-name" content="ClapRun">
 <meta name="theme-color" content="#0a0a0d">
@@ -63,10 +63,10 @@ html,body{height:100%;overflow:hidden;background:#0a0a0d}
   --fb:"Space Grotesk","Noto Sans KR",system-ui,sans-serif;
 }
 body{background:var(--bg);color:var(--hi);font-family:var(--fb);
-  display:flex;flex-direction:column;height:100dvh;max-width:430px;margin:0 auto;position:relative}
+  display:flex;flex-direction:column;height:100dvh;max-width:430px;margin:0 auto;position:relative;padding-top:env(safe-area-inset-top);box-sizing:border-box}
 
 /* SPLASH */
-#splash{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 36px;text-align:center;transition:opacity .7s,transform .7s}
+#splash{position:fixed;inset:0;z-index:999;background:var(--bg);padding-top:env(safe-area-inset-top);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 36px;text-align:center;transition:opacity .7s,transform .7s}
 #splash.out{opacity:0;transform:scale(1.04);pointer-events:none}
 .sp-grain{position:absolute;inset:0;opacity:.2;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='3'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23f)' opacity='.07'/%3E%3C/svg%3E")}
 .sp-glow{position:absolute;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(200,240,80,.07) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-55%);animation:spPulse 4s ease-in-out infinite}
@@ -2559,7 +2559,7 @@ let curTab='home',selEm='🦊',recInited=false;
 function hideSplash(){
   const sp=document.getElementById('splash');if(!sp)return;
   sp.classList.add('out');
-  setTimeout(()=>{if(sp.parentNode)sp.parentNode.removeChild(sp);if(!GR_API.currentUser())showLoginScreen();},800);
+  setTimeout(()=>{if(sp.parentNode)sp.parentNode.removeChild(sp);if(!GR_API.currentUser())initGuestUser();},800);
 }
 
 // CLOCK
@@ -3041,19 +3041,25 @@ function startMyCourseRun(c) {
   showToast('🏃 ' + c.name + ' 코스로 달리기 시작!');
   // 가이드는 initRunKakaoMap의 load 콜백에서 자동 처리
   // 이미 지도가 로드된 상태라면 바로 그리기
-  if (runMapboxMap && runMapboxMap.isStyleLoaded()) {
+  if (runMapboxMap) {
     showGuideOnRunMap(c);
   }
 }
 
 function showGuideOnRunMap(c) {
   if (!runMapboxMap || !c.latLngs || c.latLngs.length < 2) return;
-  // latLngs는 [lat,lng] → mapbox는 [lng,lat]
-  var coords = c.latLngs.map(function(ll){ return [ll[1], ll[0]]; });
+  var coords = c.latLngs.map(function(ll){ return new kakao.maps.LatLng(ll[0], ll[1]); });
+  // 기존 가이드 폴리라인 제거
+  if (window._guidePolyline) { window._guidePolyline.setMap(null); window._guidePolyline = null; }
   function doAdd() {
-    if (runMapboxMap.getLayer('guide-layer')) runMapboxMap.removeLayer('guide-layer');
-    if (runMapboxMap.getSource('guide-path')) runMapboxMap.removeSource('guide-path');
-    // Kakao: 소스/레이어 불필요
+    window._guidePolyline = new kakao.maps.Polyline({
+      map: runMapboxMap,
+      path: coords,
+      strokeWeight: 3,
+      strokeColor: '#c8f050',
+      strokeOpacity: 0.5,
+      strokeStyle: 'dashed'
+    });
     // Kakao: 소스/레이어 불필요
     // 시작점 마커
     var startEl = document.createElement('div');
@@ -3521,11 +3527,9 @@ function deleteMyCourse(id) {
 
 // Init course map when tab activated
 function initCourseMap() {
-  if (typeof mapboxgl !== "undefined") {
+  if (typeof kakao !== "undefined" && kakao.maps) {
     initCourseKakaoMap();
   } else {
-    var locEl = document.getElementById('cm-location');
-    if (locEl) locEl.textContent = '서울특별시';
     setTimeout(initCourseMap, 300);
   }
 }
@@ -3734,8 +3738,8 @@ function checkVoiceMilestone(distKm, paceStr) {
 function initRunKakaoMap() {
   var container = document.getElementById('run-mapbox-map');
   if (!container || runMapboxMap) return;
-  if (typeof mapboxgl === 'undefined') { setTimeout(initRunKakaoMap, 400); return; }
-    var runMapContainer = document.getElementById('run-mapbox-map');
+  if (typeof kakao === 'undefined' || !kakao.maps) { setTimeout(initRunKakaoMap, 400); return; }
+  var runMapContainer = document.getElementById('run-mapbox-map');
   runMapboxMap = new kakao.maps.Map(runMapContainer, {
     center: new kakao.maps.LatLng(userLat, userLng),
     level: 3
@@ -3765,7 +3769,7 @@ function initRunKakaoMap() {
 
 function updateRunKakaoMap(lat, lng) {
   if (!runMapboxMap) return;
-  runMapMarker.setLngLat([lng, lat]);
+  if(runMapMarker) runMapMarker.setPosition(new kakao.maps.LatLng(lat, lng));
   runLatLngs.push([lng, lat]);
   runMapboxMap.setCenter(new kakao.maps.LatLng(lat, lng));
   if (runPolyline) {
@@ -3787,8 +3791,8 @@ function initCourseKakaoMap() {
     if (courseMapboxMap && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function(pos) {
         userLat = pos.coords.latitude; userLng = pos.coords.longitude;
-        courseMapboxMap.setCenter([userLng, userLat]);
-        if (courseMapMarker) courseMapMarker.setLngLat([userLng, userLat]);
+        courseMapboxMap.setCenter(new kakao.maps.LatLng(userLat, userLng));
+        if (courseMapMarker) courseMapMarker.setPosition(new kakao.maps.LatLng(userLat, userLng));
       }, function(){});
     }
     return;
@@ -3832,8 +3836,8 @@ function initCourseKakaoMap() {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(pos) {
       userLat = pos.coords.latitude; userLng = pos.coords.longitude;
-      courseMapboxMap.setCenter([userLng, userLat]);
-      courseMapMarker.setLngLat([userLng, userLat]);
+      if(courseMapboxMap) courseMapboxMap.setCenter(new kakao.maps.LatLng(userLat, userLng));
+      courseMapMarker.setPosition(new kakao.maps.LatLng(userLat, userLng));
       var locEl = document.getElementById('cm-location');
       if (locEl) locEl.textContent = '📍 현재 위치';
     }, function() {
@@ -3843,8 +3847,8 @@ function initCourseKakaoMap() {
 
     navigator.geolocation.watchPosition(function(pos) {
       userLat = pos.coords.latitude; userLng = pos.coords.longitude;
-      if (courseMapMarker) courseMapMarker.setLngLat([userLng, userLat]);
-      if (!cmDrawing && courseMapboxMap) courseMapboxMap.setCenter([userLng, userLat]);
+      if (courseMapMarker) courseMapMarker.setPosition(new kakao.maps.LatLng(userLat, userLng));
+      if (!cmDrawing && courseMapboxMap) if(courseMapboxMap) courseMapboxMap.setCenter(new kakao.maps.LatLng(userLat, userLng));
     }, function(){}, { enableHighAccuracy: true, maximumAge: 3000 });
   }
 
@@ -4506,12 +4510,23 @@ async function submitAuth(){
   finally{if(btn){btn.textContent=authMode==='register'?'가입하기':'로그인';btn.style.opacity='1';btn.disabled=false;}}
 }
 async function socialLogin(provider){
-  const errEl=document.getElementById('ls-err');if(errEl)errEl.textContent=provider+' 로그인 처리 중...';
-  try{const user=await GR_API.socialLogin(provider);showToast('어서오세요, '+user.nickname+'님!');onLoginSuccess(user);}catch(e){if(errEl)errEl.textContent=e.message;}
+  const errEl=document.getElementById('ls-err');
+  if(provider==='kakao'||provider==='naver'){
+    showToast(provider==='kakao'?'카카오 로그인은 준비 중이에요':'네이버 로그인은 준비 중이에요');
+    return;
+  }
+  if(errEl)errEl.textContent=provider+' 로그인 처리 중...';
+  try{
+    const user=await GR_API.socialLogin(provider);
+    if(user){showToast('어서오세요, '+(user.nickname||'러너')+'님!');onLoginSuccess(user);}
+  }catch(e){if(errEl)errEl.textContent=e.message;}
 }
 function onLoginSuccess(user){
-  currentUser=user;const np=document.getElementById('nav-profile');if(np)np.textContent=user.avatar||'🦊';
-  ['nm-g','nm-p','nm-s'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=user.nickname;});
+  if(!user) return;
+  currentUser=user;
+  const np=document.getElementById('nav-profile');
+  if(np)np.textContent=user.avatar||'🦊';
+  ['nm-g','nm-p','nm-s'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=user.nickname||'러너';});
   hideLoginScreen();setSrvBadge(true);
 }
 function openProfile(){
@@ -4861,4 +4876,5 @@ window.addEventListener('beforeinstallprompt', function(e) {
 });
 </script>
 </body>
-</html>
+</html><button onclick="initGuestUser()" style="width:100%;height:44px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;color:rgba(255,255,255,.5);font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px">로그인 없이 시작하기</button>
+      
