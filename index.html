@@ -3764,7 +3764,7 @@ function initRunKakaoMap() {
   var runMapContainer = document.getElementById('run-mapbox-map');
   runMapboxMap = new maptilersdk.Map({
     container: runMapContainer,
-    style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0',
+    style: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0`,
     center: [userLng, userLat],
     zoom: 15,
     attributionControl: false
@@ -3820,7 +3820,7 @@ function initCourseKakaoMap() {
     var courseMapContainer = document.getElementById('course-mapbox-map');
   courseMapboxMap = new maptilersdk.Map({
     container: courseMapContainer,
-    style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0',
+    style: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0`,
     center: [userLng, userLat],
     zoom: 14,
     attributionControl: false,
