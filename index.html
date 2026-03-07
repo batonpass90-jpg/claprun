@@ -2679,6 +2679,19 @@ function showLocationModal(){
   el.style.display='flex';
 }
 function grantLocationAccess(){
+  // NEARBY_RUNNERS 초기화
+  if (typeof ANON_RUNNERS !== 'undefined' && Array.isArray(ANON_RUNNERS)) {
+    var baseLat = userLat || 37.5665;
+    var baseLng = userLng || 126.9780;
+    NEARBY_RUNNERS = ANON_RUNNERS.map(function(r) {
+      return Object.assign({}, r, {
+        lat: baseLat + (Math.random()-0.5)*0.01,
+        lng: baseLng + (Math.random()-0.5)*0.01,
+        dir: Math.random()*Math.PI*2,
+        speed: 0.000015 + Math.random()*0.00001
+      });
+    });
+  }
   var m=document.getElementById('location-modal');
   if(m){m.style.opacity='0';m.style.transition='opacity .3s';setTimeout(function(){if(m.parentNode)m.parentNode.removeChild(m);},300);}
   locGranted=true;
@@ -3545,6 +3558,7 @@ function initCourseMap() {
   }
 }
 
+var NEARBY_RUNNERS = [];
 function updateNearbyRunners() {
   // Drift each runner along their direction
   NEARBY_RUNNERS.forEach(function(r) {
@@ -3575,8 +3589,7 @@ function latLngToSVG(lat, lng) {
 
 function renderNearbyOnSVG() {
   var svg = document.getElementById('ra-svg');
-  // In Kakao map mode, skip SVG nearby rendering (Kakao markers used instead)
-  if (runMapboxMap) { svg&&svg.querySelectorAll('.nearby-runner').forEach(function(e){e.remove();}); return; }
+  // SVG nearby runners overlay
   if (!svg) return;
 
   // Update my position if GPS active
@@ -3753,7 +3766,7 @@ function initRunKakaoMap() {
   var runMapContainer = document.getElementById('run-mapbox-map');
   runMapboxMap = new maptilersdk.Map({
     container: runMapContainer,
-    style: maptilersdk.MapStyle.STREETS_DARK,
+    style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0',
     center: [userLng, userLat],
     zoom: 15,
     attributionControl: false
@@ -3816,7 +3829,7 @@ function initCourseKakaoMap() {
     var courseMapContainer = document.getElementById('course-mapbox-map');
   courseMapboxMap = new maptilersdk.Map({
     container: courseMapContainer,
-    style: maptilersdk.MapStyle.STREETS_DARK,
+    style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0',
     center: [userLng, userLat],
     zoom: 14,
     attributionControl: false,
