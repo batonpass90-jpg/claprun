@@ -3576,6 +3576,10 @@ function updateNearbyRunners() {
   }
 }
 
+var mapViewZoom = 0.008;
+var mapViewLat = 37.5665;
+var mapViewLng = 126.9780;
+
 function latLngToSVG(lat, lng) {
   // Map GPS coord to SVG viewBox 0 0 400 320
   var spanLat = mapViewZoom;
@@ -3764,7 +3768,7 @@ function initRunKakaoMap() {
   var runMapContainer = document.getElementById('run-mapbox-map');
   runMapboxMap = new maptilersdk.Map({
     container: runMapContainer,
-    style: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0`,
+    style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0',
     center: [userLng, userLat],
     zoom: 15,
     attributionControl: false
@@ -3820,7 +3824,7 @@ function initCourseKakaoMap() {
     var courseMapContainer = document.getElementById('course-mapbox-map');
   courseMapboxMap = new maptilersdk.Map({
     container: courseMapContainer,
-    style: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0`,
+    style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=GwOuZk53jsZKCQp8mJQ0',
     center: [userLng, userLat],
     zoom: 14,
     attributionControl: false,
