@@ -635,7 +635,9 @@ input[type=file]{display:none}
 .bsm { font-size: 10px; font-weight: 300; letter-spacing: .08em }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=5fe69b6f593b050ab5a4ba1ae791c0fc&libraries=services,clusterer"></script>
+  <link href="https://cdn.maptiler.com/maptiler-sdk-js/latest/maptiler-sdk.css" rel="stylesheet" />
+<script src="https://cdn.maptiler.com/maptiler-sdk-js/latest/maptiler-sdk.umd.min.js"></script>
+<script>maptilersdk.config.apiKey = 'GwOuZk53jsZKCQp8mJQ0';</script>
 <style>
 /* Kakao Maps */
 </style>
@@ -677,6 +679,7 @@ const _SB = supabase.createClient('https://imjcmmqsafeyfshgybji.supabase.co', 'e
     <button class="ls-btn" id="ls-submit" onclick="submitAuth()">로그인</button>
   </div>
   <div class="ls-switch" id="ls-switch" onclick="toggleAuthMode()">계정이 없으신가요? <span>회원가입</span></div>
+  <button onclick="initGuestUser()" style="width:100%;height:48px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:14px;color:rgba(255,255,255,.55);font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;letter-spacing:.02em">👀 둘러보기</button>
   <div class="ls-divider"><span>또는</span></div>
   <div class="ls-social">
     <button class="ls-social-btn" onclick="socialLogin('kakao')"><span class="ls-social-em">💛</span>카카오</button>
@@ -2559,7 +2562,7 @@ let curTab='home',selEm='🦊',recInited=false;
 function hideSplash(){
   const sp=document.getElementById('splash');if(!sp)return;
   sp.classList.add('out');
-  setTimeout(()=>{if(sp.parentNode)sp.parentNode.removeChild(sp);if(!GR_API.currentUser())initGuestUser();},800);
+  setTimeout(()=>{if(sp.parentNode)sp.parentNode.removeChild(sp);if(!GR_API.currentUser())showLoginScreen();},800);
 }
 
 // CLOCK
@@ -2588,7 +2591,8 @@ function goTab(v){
   const view=document.getElementById('v-'+v);if(view)view.classList.add('on');
   document.querySelectorAll('.btab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   if(v==='crew'){switchRoomTab('browse');renderRoomTabs();}
-  if(v==='coursemap'){initCourseMap();}
+  if(v==='run'){setTimeout(initRunKakaoMap, 100);}
+  if(v==='coursemap'){setTimeout(initCourseMap, 100);}
   if(v==='records'){initRec();updateRecCrews();}
   // nav-profile: records 탭에서 숨기기 (우상단 중복 방지)
   var np=document.getElementById('nav-profile');
@@ -3048,38 +3052,39 @@ function startMyCourseRun(c) {
 
 function showGuideOnRunMap(c) {
   if (!runMapboxMap || !c.latLngs || c.latLngs.length < 2) return;
-  var coords = c.latLngs.map(function(ll){ return new kakao.maps.LatLng(ll[0], ll[1]); });
+  var coords = c.latLngs.map(function(ll){ return [ll[1], ll[0]]; });
   // 기존 가이드 폴리라인 제거
   if (window._guidePolyline) { window._guidePolyline.setMap(null); window._guidePolyline = null; }
   function doAdd() {
-    window._guidePolyline = new kakao.maps.Polyline({
-      map: runMapboxMap,
-      path: coords,
-      strokeWeight: 3,
-      strokeColor: '#c8f050',
-      strokeOpacity: 0.5,
-      strokeStyle: 'dashed'
-    });
-    // Kakao: 소스/레이어 불필요
+    // 가이드 경로 GeoJSON
+    var addGuide = function() {
+      if(!runMapboxMap.getSource('guide-path')) {
+        runMapboxMap.addSource('guide-path', {type:'geojson', data:{type:'Feature',geometry:{type:'LineString',coordinates:coords}}});
+        runMapboxMap.addLayer({id:'guide-layer',type:'line',source:'guide-path',paint:{'line-color':'#c8f050','line-width':3,'line-opacity':0.5,'line-dasharray':[2,2]}});
+      } else {
+        runMapboxMap.getSource('guide-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:coords}});
+      }
+    };
+    if(runMapboxMap.isStyleLoaded()) { addGuide(); } else { runMapboxMap.on('load', addGuide); }
     // 시작점 마커
     var startEl = document.createElement('div');
     startEl.style.cssText = 'width:12px;height:12px;border-radius:50%;background:#c8f050;border:2px solid #fff;box-shadow:0 0 8px rgba(200,240,80,.8)';
-    new kakao.maps.CustomOverlay({
-      position: new kakao.maps.LatLng(coords[0][1], coords[0][0]),
+    new maptilersdk.Marker({
+      position: [coords[0][0], coords[0][1]],
       content: startEl, zIndex: 10
     }).setMap(runMapboxMap);
     // 끝점 마커
     var endEl = document.createElement('div');
     endEl.style.cssText = 'width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid #c8f050';
-    new kakao.maps.CustomOverlay({
-      position: new kakao.maps.LatLng(coords[coords.length-1][1], coords[coords.length-1][0]),
+    new maptilersdk.Marker({
+      position: [coords[coords.length-1][0], coords[coords.length-1][1]],
       content: endEl, zIndex: 10
     }).setMap(runMapboxMap);
     // 경로 전체 보이게 bounds 조정
     var bounds = coords.reduce(function(b,c){
-      b.extend(new kakao.maps.LatLng(c[1],c[0])); return b;
-    }, new kakao.maps.LatLngBounds());
-    runMapboxMap.setBounds(bounds, 40);
+      b; if(c[1]<bounds[0][0])bounds[0][0]=c[1]; if(c[0]<bounds[0][1])bounds[0][1]=c[0]; if(c[1]>bounds[1][0])bounds[1][0]=c[1]; if(c[0]>bounds[1][1])bounds[1][1]=c[0]; return b;
+    }, [[90,180],[-90,-180]]);
+    runMapboxMap.fitBounds([[bounds[0][1],bounds[0][0]],[bounds[1][1],bounds[1][0]]], {padding: 40});
   }
   doAdd();
 }
@@ -3197,11 +3202,11 @@ function toggleCourseDrawing() {
   cmDrawing = true;
   cmMode = 'draw';
   if (courseMapboxMap) {
-    courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-    courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-    courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-    courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-    courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
+    courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+    courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+    courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+    courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+    courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
   }
   cmDrawPoints = [];
   drawLatLngs = [];
@@ -3217,10 +3222,12 @@ function toggleCourseDrawing() {
 
   // Mapbox: 경로 초기화 + 커서
   if (courseMapboxMap) {
-    if (drawPolyline) { drawPolyline.setPath(drawLatLngs.map(function(c){ return new kakao.maps.LatLng(c[1],c[0]); })); }
-    courseMapboxMap.getNode().style.cursor = 'crosshair';
+    if(courseMapboxMap && courseMapboxMap.getSource && courseMapboxMap.getSource('draw-path')) {
+      courseMapboxMap.getSource('draw-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:drawLatLngs}});
+    }
+    courseMapboxMap.getCanvas().style.cursor = 'crosshair';
     // 지도 리사이즈 (전체화면으로 늘어났으므로)
-    setTimeout(function(){ courseMapboxMap.relayout(); }, 250);
+    setTimeout(function(){ courseMapboxMap.resize(); }, 250);
   }
   closeCourseDetail();
 }
@@ -3301,8 +3308,8 @@ function undoDrawPoint() {
   if (drawLatLngs.length === 0) return;
   drawLatLngs.pop();
   if (courseMapboxMap) {
-    if (drawPolyline) {
-      drawPolyline.setPath(drawLatLngs.map(function(c){ return new kakao.maps.LatLng(c[1],c[0]); }));
+    if(courseMapboxMap && courseMapboxMap.getSource && courseMapboxMap.getSource('draw-path')) {
+      courseMapboxMap.getSource('draw-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:drawLatLngs}});
     }
   }
   updateDrawDistFromLatLngs();
@@ -3314,7 +3321,9 @@ function clearDrawPoints() {
   drawLatLngs = [];
   cmDrawPoints = [];
   if (courseMapboxMap) {
-    if (drawPolyline) { drawPolyline.setPath(drawLatLngs.map(function(c){ return new kakao.maps.LatLng(c[1],c[0]); })); }
+    if(courseMapboxMap && courseMapboxMap.getSource && courseMapboxMap.getSource('draw-path')) {
+      courseMapboxMap.getSource('draw-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:drawLatLngs}});
+    }
   }
   updateDrawDistFromLatLngs();
 }
@@ -3372,12 +3381,12 @@ function setCmMode(mode) {
     btnMove.style.borderColor = 'rgba(255,255,255,.2)';
     btnMove.style.color = 'rgba(255,255,255,.5)';
     if (courseMapboxMap) {
-      courseMapboxMap.getNode().style.cursor = 'crosshair';
-      courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-      courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-      courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-      courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
-      courseMapboxMap.setDraggable(false); courseMapboxMap.setZoomable(false);
+      courseMapboxMap.getCanvas().style.cursor = 'crosshair';
+      courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+      courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+      courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+      courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
+      courseMapboxMap.dragPan.disable(); courseMapboxMap.scrollZoom.disable(); courseMapboxMap.touchZoomRotate.disable();
     }
   } else {
     btnMove.style.background = 'rgba(200,240,80,.15)';
@@ -3387,12 +3396,12 @@ function setCmMode(mode) {
     btnDraw.style.borderColor = 'rgba(255,255,255,.2)';
     btnDraw.style.color = 'rgba(255,255,255,.5)';
     if (courseMapboxMap) {
-      courseMapboxMap.getNode().style.cursor = 'grab';
-      courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-      courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-      courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-      courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-      courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
+      courseMapboxMap.getCanvas().style.cursor = 'grab';
+      courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+      courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+      courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+      courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+      courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
     }
   }
 }
@@ -3402,12 +3411,12 @@ function cancelCourseDrawing() {
   cmDrawing = false;
   drawLatLngs = [];
   if (courseMapboxMap) {
-    courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-    courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-    courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-    courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-    courseMapboxMap.setDraggable(true); courseMapboxMap.setZoomable(true);
-    courseMapboxMap.getNode().style.cursor = '';
+    courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+    courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+    courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+    courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+    courseMapboxMap.dragPan.enable(); courseMapboxMap.scrollZoom.enable(); courseMapboxMap.touchZoomRotate.enable();
+    courseMapboxMap.getCanvas().style.cursor = '';
   }
 
   // 오버레이 숨기기
@@ -3421,9 +3430,11 @@ function cancelCourseDrawing() {
   if (cmHeader) { cmHeader.style.display = ''; cmHeader.style.opacity = ''; }
 
   if (courseMapboxMap) {
-    courseMapboxMap.getNode().style.cursor = '';
-    if (drawPolyline) { drawPolyline.setPath(drawLatLngs.map(function(c){ return new kakao.maps.LatLng(c[1],c[0]); })); }
-    setTimeout(function(){ courseMapboxMap.relayout(); }, 100);
+    courseMapboxMap.getCanvas().style.cursor = '';
+    if(courseMapboxMap && courseMapboxMap.getSource && courseMapboxMap.getSource('draw-path')) {
+      courseMapboxMap.getSource('draw-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:drawLatLngs}});
+    }
+    setTimeout(function(){ courseMapboxMap.resize(); }, 100);
   }
 }
 
@@ -3738,19 +3749,21 @@ function checkVoiceMilestone(distKm, paceStr) {
 function initRunKakaoMap() {
   var container = document.getElementById('run-mapbox-map');
   if (!container || runMapboxMap) return;
-  if (typeof kakao === 'undefined' || !kakao.maps) { setTimeout(initRunKakaoMap, 400); return; }
+  if (typeof maptilersdk === 'undefined') { setTimeout(initRunKakaoMap, 400); return; }
   var runMapContainer = document.getElementById('run-mapbox-map');
-  runMapboxMap = new kakao.maps.Map(runMapContainer, {
-    center: new kakao.maps.LatLng(userLat, userLng),
-    level: 3
+  runMapboxMap = new maptilersdk.Map({
+    container: runMapContainer,
+    style: maptilersdk.MapStyle.STREETS_DARK,
+    center: [userLng, userLat],
+    zoom: 15,
+    attributionControl: false
   });
-  // 다크 스타일 배경
-  runMapContainer.style.background = '#0a0a0d';
+  setTimeout(function(){ runMapboxMap.resize(); }, 200);
   // 현재 위치 마커
   var el = document.createElement('div');
   el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#c8f050;border:3px solid #0a0a0a;box-shadow:0 0 12px rgba(200,240,80,.6)';
-  runMapMarker = new kakao.maps.CustomOverlay({
-      position: new kakao.maps.LatLng(userLat, userLng),
+  runMapMarker = new maptilersdk.Marker({
+      position: [userLng, userLat],
       content: el, zIndex: 10
     }).setMap(runMapboxMap);
   runLatLngs = [];
@@ -3769,12 +3782,11 @@ function initRunKakaoMap() {
 
 function updateRunKakaoMap(lat, lng) {
   if (!runMapboxMap) return;
-  if(runMapMarker) runMapMarker.setPosition(new kakao.maps.LatLng(lat, lng));
+  if(runMarker) runMarker.setLngLat([lng, lat]);
   runLatLngs.push([lng, lat]);
-  runMapboxMap.setCenter(new kakao.maps.LatLng(lat, lng));
-  if (runPolyline) {
-    runPolyline.setPath(runLatLngs.map(function(c){ return new kakao.maps.LatLng(c[1], c[0]); }));
-    if (!runPolyline.getMap()) runPolyline.setMap(runMapboxMap);
+  if(runMapboxMap) runMapboxMap.setCenter([lng, lat]);
+  if(runMapboxMap && runMapboxMap.getSource && runMapboxMap.getSource('run-path')) {
+    runMapboxMap.getSource('run-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:runLatLngs}});
   }
 }
 
@@ -3791,8 +3803,8 @@ function initCourseKakaoMap() {
     if (courseMapboxMap && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function(pos) {
         userLat = pos.coords.latitude; userLng = pos.coords.longitude;
-        courseMapboxMap.setCenter(new kakao.maps.LatLng(userLat, userLng));
-        if (courseMapMarker) courseMapMarker.setPosition(new kakao.maps.LatLng(userLat, userLng));
+        courseMapboxMap.setCenter([userLng, userLat]);
+        if (courseMapMarker) if(courseMapMarker) courseMapMarker.setLngLat([userLng, userLat]);
       }, function(){});
     }
     return;
@@ -3802,42 +3814,41 @@ function initCourseKakaoMap() {
   if (typeof mapboxgl === 'undefined') { setTimeout(initCourseKakaoMap, 400); return; }
   courseMapInited = true;
     var courseMapContainer = document.getElementById('course-mapbox-map');
-  courseMapboxMap = new kakao.maps.Map(courseMapContainer, {
-    center: new kakao.maps.LatLng(userLat, userLng),
-    level: 4
+  courseMapboxMap = new maptilersdk.Map({
+    container: courseMapContainer,
+    style: maptilersdk.MapStyle.STREETS_DARK,
+    center: [userLng, userLat],
+    zoom: 14,
+    attributionControl: false,
+    dragRotate: false
   });
-  courseMapContainer.style.background = '#0a0a0d';
+  setTimeout(function(){ courseMapboxMap.resize(); }, 200);
   // 코스 그리기용 폴리라인
-  drawPolyline = new kakao.maps.Polyline({
-    map: courseMapboxMap,
-    path: [],
-    strokeWeight: 4,
-    strokeColor: '#c8f050',
-    strokeOpacity: 0.9,
-    strokeStyle: 'solid'
+  // MapTiler: 드로잉 폴리라인은 GeoJSON source로 처리
+  courseMapboxMap.on('load', function() {
+    courseMapboxMap.addSource('draw-path', {type:'geojson', data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
+    courseMapboxMap.addLayer({id:'draw-path',type:'line',source:'draw-path',paint:{'line-color':'#c8f050','line-width':4,'line-opacity':0.9}});
+    courseMapboxMap.addSource('run-path-course', {type:'geojson', data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
+    courseMapboxMap.addLayer({id:'run-path-course',type:'line',source:'run-path-course',paint:{'line-color':'#c8f050','line-width':3,'line-opacity':0.7}});
   });
   // 런 경로 폴리라인
-  runPolyline = new kakao.maps.Polyline({
-    map: courseMapboxMap,
-    path: [],
-    strokeWeight: 3,
-    strokeColor: '#c8f050',
-    strokeOpacity: 0.7,
-    strokeStyle: 'solid'
+  // MapTiler: 폴리라인은 GeoJSON source로 처리
+  runMapboxMap.on('load', function() {
+    runMapboxMap.addSource('run-path', {type:'geojson', data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
+    runMapboxMap.addLayer({id:'run-path',type:'line',source:'run-path',paint:{'line-color':'#c8f050','line-width':3,'line-opacity':0.7}});
   });
   // 현재 위치 마커
   var el = document.createElement('div');
   el.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#c8f050;border:2px solid #fff;box-shadow:0 0 8px rgba(200,240,80,.5)';
-  courseMapMarker = new kakao.maps.CustomOverlay({
-      position: new kakao.maps.LatLng(userLat, userLng),
-      content: el, zIndex: 10
-    }).setMap(courseMapboxMap);
+  courseMapMarker = new maptilersdk.Marker({element: el})
+    .setLngLat([userLng, userLat])
+    .addTo(courseMapboxMap);
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(pos) {
       userLat = pos.coords.latitude; userLng = pos.coords.longitude;
-      if(courseMapboxMap) courseMapboxMap.setCenter(new kakao.maps.LatLng(userLat, userLng));
-      courseMapMarker.setPosition(new kakao.maps.LatLng(userLat, userLng));
+      if(courseMapboxMap) courseMapboxMap.setCenter([userLng, userLat]);
+      if(courseMapMarker) courseMapMarker.setLngLat([userLng, userLat]);
       var locEl = document.getElementById('cm-location');
       if (locEl) locEl.textContent = '📍 현재 위치';
     }, function() {
@@ -3847,27 +3858,18 @@ function initCourseKakaoMap() {
 
     navigator.geolocation.watchPosition(function(pos) {
       userLat = pos.coords.latitude; userLng = pos.coords.longitude;
-      if (courseMapMarker) courseMapMarker.setPosition(new kakao.maps.LatLng(userLat, userLng));
-      if (!cmDrawing && courseMapboxMap) if(courseMapboxMap) courseMapboxMap.setCenter(new kakao.maps.LatLng(userLat, userLng));
+      if (courseMapMarker) if(courseMapMarker) courseMapMarker.setLngLat([userLng, userLat]);
+      if (!cmDrawing && courseMapboxMap) if(courseMapboxMap) courseMapboxMap.setCenter([userLng, userLat]);
     }, function(){}, { enableHighAccuracy: true, maximumAge: 3000 });
   }
 
-  // 코스 그리기 클릭 이벤트
-  // Kakao: 맵 로드 완료 시 바로 실행
-  (function() {
-    // 드로잉 경로 소스
-    // Kakao: 소스/레이어 불필요
-    // Kakao: 소스/레이어 불필요
-    drawLatLngs = [];
-    // 추천 코스 표시
-    highlightMapCourses(null);
-    renderNearbyCourses();
-  });
+  drawLatLngs = [];
+  highlightMapCourses(null);
+  renderNearbyCourses();
 
-  kakao.maps.event.addListener(courseMapboxMap, 'click', function(mouseEvent) {
+  courseMapboxMap.on('click', function(e) {
     if (!cmDrawing || cmMode !== 'draw') return;
-    var latlng = mouseEvent.latLng;
-    drawLatLngs.push([latlng.getLng(), latlng.getLat()]);
+    drawLatLngs.push([e.lngLat.lng, e.lngLat.lat]);
     // Kakao: 폴리라인 업데이트는 setPath로 처리
     updateDrawDistFromLatLngs();
   });
@@ -3876,13 +3878,13 @@ function initCourseKakaoMap() {
   var _lastDrawTime = 0;
 
   // touchstart: 그리기 모드일 때 지도 드래그 원천 차단
-  courseMapboxMap.getNode().addEventListener('touchstart', function(e) {
+  courseMapboxMap.getCanvas().addEventListener('touchstart', function(e) {
     if (!cmDrawing || cmMode !== 'draw') return;
     e.preventDefault();
     e.stopPropagation();
   }, { passive: false });
 
-  courseMapboxMap.getNode().addEventListener('touchmove', function(e) {
+  courseMapboxMap.getCanvas().addEventListener('touchmove', function(e) {
     if (!cmDrawing || cmMode !== 'draw') return;
     e.preventDefault();
     e.stopPropagation();
@@ -3890,32 +3892,31 @@ function initCourseKakaoMap() {
     if (now - _lastDrawTime < 80) return; // 80ms 간격으로 포인트 추가
     _lastDrawTime = now;
     var touch = e.touches[0];
-    var rect = courseMapboxMap.getNode().getBoundingClientRect();
+    var rect = courseMapboxMap.getCanvas().getBoundingClientRect();
     var x = touch.clientX - rect.left;
     var y = touch.clientY - rect.top;
-    var proj = courseMapboxMap.getProjection();
-    var lngLat = proj.coordsFromContainerPoint(new kakao.maps.Point(x, y));
-    drawLatLngs.push([lngLat.getLng(), lngLat.getLat()]);
-    if (drawPolyline) {
-      drawPolyline.setPath(drawLatLngs.map(function(c){ return new kakao.maps.LatLng(c[1],c[0]); }));
+    var lngLat = courseMapboxMap.unproject([x, y]);
+    drawLatLngs.push([lngLat.lng, lngLat.lat]);
+    if(courseMapboxMap && courseMapboxMap.getSource && courseMapboxMap.getSource('draw-path')) {
+      courseMapboxMap.getSource('draw-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:drawLatLngs}});
     }
     updateDrawDistFromLatLngs();
   }, { passive: false });
 
   // 마우스 드래그로 연속 그리기 (desktop)
   var _mouseDown = false;
-  courseMapboxMap.getNode().addEventListener('mousedown', function(e) { if (cmDrawing) _mouseDown = true; });
-  courseMapboxMap.getNode().addEventListener('mouseup',   function()  { _mouseDown = false; });
-  courseMapboxMap.getNode().addEventListener('mousemove', function(e) {
+  courseMapboxMap.getCanvas().addEventListener('mousedown', function(e) { if (cmDrawing) _mouseDown = true; });
+  courseMapboxMap.getCanvas().addEventListener('mouseup',   function()  { _mouseDown = false; });
+  courseMapboxMap.getCanvas().addEventListener('mousemove', function(e) {
     if (!cmDrawing || !_mouseDown) return;
     var now = Date.now();
     if (now - _lastDrawTime < 60) return;
     _lastDrawTime = now;
-    var rect = courseMapboxMap.getNode().getBoundingClientRect();
+    var rect = courseMapboxMap.getCanvas().getBoundingClientRect();
     var lngLat = courseMapboxMap.unproject([e.clientX - rect.left, e.clientY - rect.top]);
     drawLatLngs.push([lngLat.lng, lngLat.lat]);
-    if (drawPolyline) {
-      drawPolyline.setPath(drawLatLngs.map(function(c){ return new kakao.maps.LatLng(c[1],c[0]); }));
+    if(courseMapboxMap && courseMapboxMap.getSource && courseMapboxMap.getSource('draw-path')) {
+      courseMapboxMap.getSource('draw-path').setData({type:'Feature',geometry:{type:'LineString',coordinates:drawLatLngs}});
     }
     updateDrawDistFromLatLngs();
   });
@@ -4521,6 +4522,21 @@ async function socialLogin(provider){
     if(user){showToast('어서오세요, '+(user.nickname||'러너')+'님!');onLoginSuccess(user);}
   }catch(e){if(errEl)errEl.textContent=e.message;}
 }
+function initGuestUser(){
+  var guest={
+    id:'guest_'+Date.now(),
+    email:'guest@claprun.app',
+    nickname:'게스트러너',
+    avatar:'🦊',
+    atCode:'AF-GUEST',
+    totalKm:0,
+    runCount:0,
+    joinedAt:new Date().toISOString()
+  };
+  GR_API._saveSession(guest);
+  onLoginSuccess(guest);
+}
+
 function onLoginSuccess(user){
   if(!user) return;
   currentUser=user;
@@ -4876,5 +4892,4 @@ window.addEventListener('beforeinstallprompt', function(e) {
 });
 </script>
 </body>
-</html><button onclick="initGuestUser()" style="width:100%;height:44px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;color:rgba(255,255,255,.5);font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px">로그인 없이 시작하기</button>
-      
+</html>
